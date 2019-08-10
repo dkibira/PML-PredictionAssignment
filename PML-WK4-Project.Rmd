@@ -1,0 +1,156 @@
+---
+title: "PML-Project"
+author: "DK"
+date: "8/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE)
+```
+
+This is a project report to quantify how much of a particular exercise activity and how well it is done. The projet uses data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. The objective is to develop a cross-validated model and use it to predict 20 test cases.
+
+CALLING FUNCTION LIBRARIES AND READING DATA INTO WORKSPACE
+
+```{r, echo=FALSE}
+setwd("c:\\kibira\\R-course")
+
+```
+Library xlsx for reading data as an excel fine for easy viewing
+Library caret for the functions needed for building the predictive model
+
+```{r, echo=TRUE}
+library(xlsx)
+library(caret)
+```
+Training data is the data to build the model, we assign it object "build_data"
+
+Test data is used to make predictions using the model, we assign it object "test_data"
+
+Mark all cells as "not available" if they have entries "NA" and "#DIV/0!", or if they are empty
+
+```{r, echo=TRUE}
+
+build_data <- read.csv("pml-training.csv",na.strings=c("NA","#DIV/0!",""))
+test_data <- read.csv("pml-testing.csv",na.strings=c("NA","#DIV/0!","")) 
+```
+
+PREPROCESS THE MODEL BUILDING DATA
+
+
+1 - Delete variables that are unlikely to affect the outcome
+
+```{r, echo=TRUE}
+var_delete = c("X","user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp", "new_window","num_window")
+build_data <- build_data[, -which(names(build_data) %in% var_delete)]
+```
+
+2- Check status of variables that have "not available" data entries
+
+```{r, echo=TRUE}
+build_data_na <- build_data [, colSums(is.na(build_data)) > 0]
+dim(build_data_na)
+dim(build_data)
+```
+
+The variables have no data collected and should be removed 
+So include in the build data only those that do not have "not availabele" entries
+
+```{r, echo=TRUE}
+build_data <- build_data[, colSums(is.na(build_data)) == 0]
+```
+
+3- Remove variables that have very low levels of variability
+
+```{r, echo=TRUE}
+var_low <- nearZeroVar(build_data, freqCut = 95/5)
+
+if(identical(var_low, integer(0)) == FALSE){
+	build_data  <- build_data [, -var_low]
+}
+```
+
+PREPROCESS THE MODEL TEST DATA PROVIDED   
+
+
+1 - Delete variables that are unlikely to affect the outcome
+
+```{r, echo=TRUE}
+var_delete = c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window")
+test_data <- test_data[, -which(names(test_data) %in% var_delete)]
+```
+
+2- Remove columns/predictors that have  "na"
+
+```{r, echo=TRUE}
+test_data <- test_data[, colSums(is.na(test_data)) == 0]
+```
+
+3- Remove variables that have very low levels of variability
+
+```{r, echo=TRUE}
+var_low <- nearZeroVar(test_data, freqCut = 10/1)
+
+if(identical(var_low, integer(0)) == FALSE){
+	test_data  <- test_data [, -var_low]
+}
+```
+4 - Remove the last colum data and rename the column, "classe" as it is with the training data
+
+```{r, echo=TRUE}
+test_data$problem_id <- ""; colnames(test_data)[colnames(test_data)=="problem_id"] <- "classe"
+test_data$classe <- as.factor(test_data$classe)
+```
+
+BUILD THE MODEL
+
+To estimate out of sample error, we need a test data set, so we separate the model building data, i.e., in object, train_data into "training" and "testing" sets on a (60/40) basis
+
+```{r, echo=TRUE}
+set.seed(3225)
+inTrain <- createDataPartition(y=build_data$classe, p=0.6, list=FALSE)
+training <- build_data[inTrain,]
+testing <- build_data[-inTrain,]
+```
+
+To perform cross validation use k-fold cross validation and method = random forest. I chose random forest because of its efficiency on large data sets as well as its accuracy in control parameters, method is "cv", cross validation and number of folds = 8, repeated 4 times
+
+```{r, echo=TRUE}
+ControlParameters <- trainControl(method="cv", number=8, repeats = 4, savePredictions = TRUE, classProbs = TRUE)
+```
+
+Build the model using the training data and assign it to object modelRF 
+
+```{r, echo=TRUE}
+modelRF <- train(classe~., data=training, method="rf", trControl=ControlParameters)
+```
+
+Test the data on the testing data 
+
+```{r, echo=TRUE}
+rf.predict <- predict(modelRF, testing)
+```
+The confusion matrix
+
+```{r, echo=TRUE}
+confusionMatrix(rf.predict, testing$classe)
+```
+The cross validation graph
+
+```{r, echo=TRUE}
+plot(modelRF)
+```
+
+Plot the model
+```{r, echo=TRUE}
+plot(modelRF$finalModel)
+```
+
+Use the model to predict the classe in the originally uploaded 20 different test cases. 
+
+```{r, echo=TRUE}
+predictions <- predict(modelRF, test_data)
+
+predictions
+```
